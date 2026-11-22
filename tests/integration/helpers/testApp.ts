@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { importPKCS8, SignJWT } from 'jose';
 import request from 'supertest';
-import { createApp } from '../../src/app.js';
-import type { Clients } from '../../src/clients/clients.js';
-import { EventsClient } from '../../src/clients/eventsClient.js';
-import { NotificationsClient } from '../../src/clients/notificationsClient.js';
-import { PaymentsClient } from '../../src/clients/paymentsClient.js';
-import { TicketsClient } from '../../src/clients/ticketsClient.js';
-import { createPool } from '../../src/database/database.js';
-import { createJwtVerifier } from '../../src/utils/jwt.js';
+import { createApp } from '../../../src/app.js';
+import type { Clients } from '../../../src/clients/clients.js';
+import { EventsClient } from '../../../src/clients/eventsClient.js';
+import { NotificationsClient } from '../../../src/clients/notificationsClient.js';
+import { PaymentsClient } from '../../../src/clients/paymentsClient.js';
+import { TicketsClient } from '../../../src/clients/ticketsClient.js';
+import { createPool } from '../../../src/database/database.js';
+import { createJwtVerifier } from '../../../src/utils/jwt.js';
 import { startFakeServices } from './fakeServices.js';
 
 /** Timeout corto para que los casos de timeout no alarguen la suite (los dobles tardan SLOW_MS). */

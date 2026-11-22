@@ -41,8 +41,10 @@ El servidor no crea tablas al arrancar: si faltan las migraciones, no levanta. T
 | `pnpm dev` | Desarrollo con recarga. |
 | `pnpm build` y `pnpm start` | Compilar y ejecutar `dist/`. |
 | `pnpm typecheck` | Comprobar tipos. |
+| `pnpm lint` | ESLint (TypeScript recomendado). |
 | `pnpm migrate` / `pnpm migrate:down` | Aplicar las pendientes / revertir la última. |
-| `pnpm test` | Pruebas sobre `orders_test` (ver [Pruebas](#pruebas)). |
+| `pnpm test` / `pnpm test:coverage` | Unit tests con mocks, sin base de datos (coverage mínimo 85 %). |
+| `pnpm test:integration` | Pruebas de integración sobre `orders_test` (ver [Pruebas](#pruebas)). |
 
 Para detener el servicio, usar `Ctrl+C`; las órdenes quedan guardadas en la base.
 
@@ -178,7 +180,18 @@ src/
 
 ## Pruebas
 
-Las pruebas necesitan una base **desechable** cuyo nombre empiece por `orders_test`. Se niegan a usar cualquier otra, porque borran sus tablas. Como administrador:
+### Unit tests (los que corre el pipeline)
+
+```bash
+pnpm test            # rápido, sin base de datos ni red
+pnpm test:coverage   # falla si alguna métrica baja del 85 %
+```
+
+Están en `tests/unit/` y reemplazan Postgres, `fetch` y los servicios internos con mocks. El reporte HTML queda en `coverage/` y el JUnit en `reports/junit.xml`.
+
+### Integración (opcional, con Postgres)
+
+Las pruebas de integración necesitan una base **desechable** cuyo nombre empiece por `orders_test`. Se niegan a usar cualquier otra, porque borran sus tablas. Como administrador:
 
 ```sql
 CREATE DATABASE orders_test OWNER orders_user;
@@ -186,7 +199,7 @@ CREATE DATABASE orders_test OWNER orders_user;
 
 ```bash
 cp .env.test.example .env.test   # ajustar TEST_DATABASE_URL
-pnpm test
+pnpm test:integration
 ```
 
 Aplican las migraciones, generan su propia clave RSA y usan dobles HTTP de events, payments, tickets y notifications, así que no hace falta levantar ningún otro servicio. Cubren los escenarios V3 y V6-V11 del plan:
@@ -198,6 +211,38 @@ Aplican las migraciones, generan su propia clave RSA y usan dobles HTTP de event
 - **Consultas y reporte (V11):** aislamiento entre compradores y reporte por organizador.
 
 **Estado:** la suite está escrita, pero todavía no se ejecutó, porque falta crear `orders_test`. El flujo y los endpoints se verificaron manualmente contra `orders_db` con servicios dobles.
+
+## CI/CD
+
+`.github/workflows/ci.yml` corre en cada push a `develop` y `main`, y en los PR hacia esas ramas.
+
+| Job | Qué hace | Cuándo |
+|---|---|---|
+| `build` | `pnpm install` → lint → typecheck → `pnpm audit` (bloquea solo vulnerabilidades críticas) → unit tests + coverage (≥ 85 %) → build → artifacts | siempre |
+| `codeql` | Análisis estático de seguridad y calidad (CodeQL); falla si hay hallazgos de nivel error. Resultados en *Security → Code scanning* | siempre |
+| `docker-image` | Construye y publica la imagen en `ghcr.io/jalter-ego/entradasya-orders` | push a `develop` o `main` |
+| `release` | Crea el tag `vX.Y.Z` y el GitHub Release con el `.tgz` | push a `main`, si la versión es nueva |
+
+**Artifacts** (pestaña *Actions* → ejecución → *Artifacts*):
+- `app-package`: `orders-<versión>-<sha>.tgz` con `dist/`, `package.json`, lockfile, `migrations/` y `scripts/`. Para correrlo: `pnpm install --prod --frozen-lockfile && node dist/server.js`.
+- `test-reports`: cobertura (HTML y lcov) y JUnit.
+
+**Tags de la imagen:**
+- `develop` → `dev`, `dev-<sha7>`
+- `main` → `<versión>`, `latest`, `sha-<sha7>`
+
+**Publicar una versión:** subir `version` en `package.json` (por ejemplo `pnpm version minor --no-git-tag-version`) en el PR hacia `main`. Si la versión ya tiene release, el pipeline publica la imagen `sha-<sha7>` pero no crea otro release.
+
+**Configuración:** ninguna. El pipeline solo usa el `GITHUB_TOKEN` automático.
+
+**Imagen local:**
+
+```bash
+docker build -t entradasya-orders .
+docker run --rm -p 3003:3003 --env-file .env entradasya-orders
+```
+
+La imagen no lee `.env` ni incluye las migraciones: la configuración llega por variables de entorno (con `HOST=0.0.0.0`).
 
 ## Límites de v1
 
