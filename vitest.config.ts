@@ -1,17 +1,22 @@
-import { existsSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 
-// TEST_DATABASE_URL vive en .env.test (fuera de Git). Nunca se lee el .env de desarrollo.
-if (existsSync('.env.test')) process.loadEnvFile('.env.test');
-
+// Unit tests: sin Postgres ni red. Las dependencias se reemplazan con mocks.
+// La suite de integración (con base real) está en vitest.integration.config.ts.
 export default defineConfig({
   test: {
-    include: ['tests/**/*.test.ts'],
-    globalSetup: ['tests/setup/globalSetup.ts'],
-    setupFiles: ['tests/setup/env.ts'],
-    // Los archivos comparten la base de pruebas: se ejecutan uno por vez.
-    fileParallelism: false,
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
+    include: ['tests/unit/**/*.test.ts'],
+    setupFiles: ['tests/unit/setup/env.ts'],
+    restoreMocks: true,
+    unstubGlobals: true,
+    reporters: ['default', 'junit'],
+    outputFile: { junit: 'reports/junit.xml' },
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/server.ts', 'src/types/**', '**/*.d.ts'],
+      reporter: ['text', 'html', 'lcov', 'json-summary'],
+      reportsDirectory: 'coverage',
+      thresholds: { lines: 85, statements: 85, functions: 85, branches: 85 },
+    },
   },
 });

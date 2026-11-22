@@ -6,7 +6,7 @@ import { testDatabaseUrl } from './testDatabase.js';
 export default async function setup(): Promise<void> {
   await runner({
     databaseUrl: testDatabaseUrl(),
-    dir: fileURLToPath(new URL('../../migrations', import.meta.url)),
+    dir: fileURLToPath(new URL('../../../migrations', import.meta.url)),
     direction: 'up',
     count: Infinity,
     migrationsTable: 'pgmigrations',

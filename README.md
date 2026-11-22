@@ -42,7 +42,8 @@ El servidor no crea tablas al arrancar: si faltan las migraciones, no levanta. T
 | `pnpm build` y `pnpm start` | Compilar y ejecutar `dist/`. |
 | `pnpm typecheck` | Comprobar tipos. |
 | `pnpm migrate` / `pnpm migrate:down` | Aplicar las pendientes / revertir la última. |
-| `pnpm test` | Pruebas sobre `orders_test` (ver [Pruebas](#pruebas)). |
+| `pnpm test` / `pnpm test:coverage` | Unit tests con mocks, sin base de datos (coverage mínimo 85 %). |
+| `pnpm test:integration` | Pruebas de integración sobre `orders_test` (ver [Pruebas](#pruebas)). |
 
 Para detener el servicio, usar `Ctrl+C`; las órdenes quedan guardadas en la base.
 
@@ -186,7 +187,7 @@ CREATE DATABASE orders_test OWNER orders_user;
 
 ```bash
 cp .env.test.example .env.test   # ajustar TEST_DATABASE_URL
-pnpm test
+pnpm test:integration
 ```
 
 Aplican las migraciones, generan su propia clave RSA y usan dobles HTTP de events, payments, tickets y notifications, así que no hace falta levantar ningún otro servicio. Cubren los escenarios V3 y V6-V11 del plan:
