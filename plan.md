@@ -131,11 +131,14 @@ Permisos por job (mínimos): `docker-image` → `packages: write`; `release` →
 
 ## 7. Dockerfile (multi-stage)
 
-1. **deps**: `node:22-alpine` + corepack/pnpm → `pnpm install --frozen-lockfile`
-2. **build**: copia el código → `pnpm build` → `pnpm prune --prod`
-3. **runtime**: `node:22-alpine`, `NODE_ENV=production`, usuario no root (`node`), copia `dist/`, `node_modules` de producción, `package.json` y `migrations/`. `EXPOSE 3003`, `HOST=0.0.0.0`, `HEALTHCHECK` contra `/health`, `CMD ["node", "dist/server.js"]`
+1. **base**: `node:22-alpine` + `pnpm@12.11.2` (la misma versión que `packageManager` en `package.json`)
+2. **build**: `pnpm install --frozen-lockfile` → `pnpm build`
+3. **prod-deps**: `pnpm install --frozen-lockfile --prod`
+4. **runtime**: `node:22-alpine` sin pnpm, `NODE_ENV=production`, usuario no root (`node`). Copia `dist/`, el `node_modules` de producción y `package.json`. `EXPOSE 3003`, `HOST=0.0.0.0`, `HEALTHCHECK` contra `/health` con `fetch` de Node (sin curl ni wget), `CMD ["node", "dist/server.js"]`
 
-`.dockerignore`: `node_modules`, `dist`, `coverage`, `tests`, `.git`, `.env*`, `keys/`, `postman/`, `.local/`.
+`.dockerignore`: `node_modules`, `dist`, `coverage`, `reports`, `tests`, `migrations`, `scripts`, `.git`, `.github`, `.env*`, `keys/`, `postman/`, `.local/`, `*.md`.
+
+> Las migraciones **no** van en la imagen: el runner (`tsx` + `node-pg-migrate`) es una dependencia de desarrollo. Siguen en el artifact `.tgz` y se decidirá cómo aplicarlas (por ejemplo, un Job de k8s) junto con el despliegue (§10).
 
 > Nota: el `start` actual usa `--env-file-if-exists=.env`. En el contenedor la configuración llega por variables de entorno, por eso el `CMD` llama a `node` directamente.
 
@@ -179,11 +182,11 @@ Se decide al final. Opciones a evaluar:
 1. **Ramas:** ✅ `develop` creada y subida. ⏳ Falta que el dueño del repo renombre `master` → `main`.
 2. **Tests:** ✅ integración movida a `tests/integration/`, configs separadas, coverage con umbral 85 % y reporte JUnit en `reports/junit.xml`. ⏳ Falta correr `pnpm test:integration` contra una base `orders_test` real (según el README, esa suite nunca se ejecutó).
 3. **Unit tests:** ✅ 188 tests en 15 archivos, sin Postgres ni red (≈3,5 s). Cobertura: 100 % en líneas, sentencias y funciones, 98,66 % en ramas. Se comprobó que con un umbral mayor `pnpm test:coverage` falla (exit 1).
-4. **ESLint:** agregarlo y corregir lo que reporte.
-5. **Docker:** `Dockerfile` + `.dockerignore`; probar `docker build` y `docker run` en local.
-6. **Sonar:** configurar SonarQube Cloud y `sonar-project.properties`.
-7. **Workflow:** `ci.yml`; probarlo con un PR hacia `develop`, después push a `develop` (imagen `dev`) y después merge a `main` (imagen `0.1.0` + release `v0.1.0`).
-8. **Docs:** README.
+4. **ESLint:** ✅ `eslint.config.js` (ESLint 9 + typescript-eslint recommended) y script `pnpm lint`. Revisa `src/`, `tests/unit/` y `scripts/` sin errores; `tests/integration/` queda excluido.
+5. **Docker:** ✅ `Dockerfile` multi-stage + `.dockerignore`, y `packageManager: pnpm@12.11.2` en `package.json`. ⏳ Falta probar `docker build` / `docker run` (Docker Desktop no estaba corriendo); si no, se valida en el primer run del pipeline.
+6. **Sonar:** ✅ `sonar-project.properties`. ⏳ Falta crear el proyecto en SonarQube Cloud y cargar `SONAR_TOKEN`, `SONAR_ORGANIZATION` y `SONAR_PROJECT_KEY` (§8). Mientras falten, el job `sonar` se omite con un warning en vez de fallar.
+7. **Workflow:** ✅ `.github/workflows/ci.yml` escrito. ⏳ Bloqueado: `pnpm audit --prod --audit-level high` falla por GHSA-mrhx-c7xc-m3w5 en `zod` 3.x (solo se corrige en zod ≥ 4.6.6). Después: probarlo con un PR hacia `develop`, un push a `develop` (imagen `dev`) y un merge a `main` (imagen `0.1.0` y release `v0.1.0`).
+8. **Docs:** ✅ README (secciones Pruebas y CI/CD).
 9. **Despliegue:** decidir según §10.
 
 ## 12. Criterios de aceptación
