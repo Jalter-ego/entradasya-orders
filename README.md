@@ -218,8 +218,8 @@ Aplican las migraciones, generan su propia clave RSA y usan dobles HTTP de event
 
 | Job | Qué hace | Cuándo |
 |---|---|---|
-| `build` | `pnpm install` → lint → typecheck → `pnpm audit` → unit tests + coverage (≥ 85 %) → build → artifacts | siempre |
-| `sonar` | Análisis y quality gate en SonarQube Cloud | siempre (se omite si falta `SONAR_TOKEN`) |
+| `build` | `pnpm install` → lint → typecheck → `pnpm audit` (bloquea solo vulnerabilidades críticas) → unit tests + coverage (≥ 85 %) → build → artifacts | siempre |
+| `codeql` | Análisis estático de seguridad y calidad (CodeQL); falla si hay hallazgos de nivel error. Resultados en *Security → Code scanning* | siempre |
 | `docker-image` | Construye y publica la imagen en `ghcr.io/jalter-ego/entradasya-orders` | push a `develop` o `main` |
 | `release` | Crea el tag `vX.Y.Z` y el GitHub Release con el `.tgz` | push a `main`, si la versión es nueva |
 
@@ -233,7 +233,7 @@ Aplican las migraciones, generan su propia clave RSA y usan dobles HTTP de event
 
 **Publicar una versión:** subir `version` en `package.json` (por ejemplo `pnpm version minor --no-git-tag-version`) en el PR hacia `main`. Si la versión ya tiene release, el pipeline publica la imagen `sha-<sha7>` pero no crea otro release.
 
-**Configuración (una sola vez):** secret `SONAR_TOKEN` y variables `SONAR_ORGANIZATION` y `SONAR_PROJECT_KEY` en *Settings → Secrets and variables → Actions*.
+**Configuración:** ninguna. El pipeline solo usa el `GITHUB_TOKEN` automático.
 
 **Imagen local:**
 

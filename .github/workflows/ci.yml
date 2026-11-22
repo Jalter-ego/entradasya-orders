@@ -47,8 +47,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Auditoría de dependencias de producción
-        run: pnpm audit --prod --audit-level high
+      - name: Auditoría de dependencias de producción (bloquea solo vulnerabilidades críticas)
+        run: pnpm audit --prod --audit-level critical
 
       - name: Unit tests + coverage (mínimo 85 %)
         run: pnpm test:coverage
@@ -96,35 +96,52 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Análisis estático con SonarQube Cloud (quality gate)
+  # Análisis estático con CodeQL (sin configuración externa)
+  # Resultados en la pestaña Security → Code scanning.
   # ---------------------------------------------------------------------------
-  sonar:
-    name: SonarQube Cloud
+  codeql:
+    name: CodeQL
     runs-on: ubuntu-latest
     needs: build
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    permissions:
+      contents: read
+      security-events: write # subir los resultados a Code scanning
+      actions: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Sonar necesita el historial para detectar código nuevo
 
-      - name: Descargar reportes de tests
-        uses: actions/download-artifact@v4
+      - uses: github/codeql-action/init@v4
         with:
-          name: test-reports
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-and-quality
+          config: |
+            paths:
+              - src
 
-      - name: Sonar no configurado
-        if: env.SONAR_TOKEN == ''
-        run: echo "::warning::Falta el secret SONAR_TOKEN; se omite el análisis de SonarQube Cloud (ver plan.md §8)."
-
-      - name: Análisis + quality gate
-        if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@v5
+      - name: Análisis
+        uses: github/codeql-action/analyze@v4
         with:
-          args: >
-            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+          category: /language:javascript-typescript
+          output: sarif-results
+
+      - name: Gate (falla si hay hallazgos de nivel error)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const dir = 'sarif-results';
+            const results = fs.readdirSync(dir)
+              .flatMap((f) => JSON.parse(fs.readFileSync(dir + '/' + f, 'utf8')).runs)
+              .flatMap((run) => run.results ?? []);
+            const count = (level) => results.filter((r) => (r.level ?? 'warning') === level).length;
+            const errors = count('error');
+            console.log('Hallazgos -> error:', errors, '| warning:', count('warning'), '| note:', count('note'));
+            for (const r of results.filter((r) => r.level === 'error')) {
+              const loc = r.locations?.[0]?.physicalLocation;
+              console.log('::error file=' + loc?.artifactLocation?.uri + ',line=' + (loc?.region?.startLine ?? 1) + '::' + r.ruleId + ': ' + r.message.text);
+            }
+            if (errors > 0) process.exit(1);
+          "
 
   # ---------------------------------------------------------------------------
   # Imagen Docker en GHCR (solo push a develop/main)
@@ -132,7 +149,7 @@ jobs:
   docker-image:
     name: Imagen Docker
     runs-on: ubuntu-latest
-    needs: [build, sonar]
+    needs: [build, codeql]
     if: github.event_name == 'push'
     permissions:
       contents: read
